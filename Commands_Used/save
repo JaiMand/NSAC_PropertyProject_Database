@@ -1,0 +1,92 @@
+
+
+
+
+
+
+
+
+
+
+
+USE ManagingProperties;
+
+INSERT INTO bookings (fk_customer_id, fk_property_id, fk_agent_id, date_placed, time_placed)
+SELECT customer_id, property_id, agent_id, CURDATE(), '10:00:00'
+FROM customers, properties, agents
+WHERE properties.property_id = 1 -- the desired property ID
+  AND agents.agent_id = 1 -- the desired agent ID
+  AND properties.fk_seller_id = 1 -- the seller ID for the property
+  AND properties.status = 'FOR SALE'
+  AND customers.customer_id = 1 -- the buyer ID
+  AND NOT EXISTS (
+    SELECT *
+    FROM bookings
+    WHERE bookings.fk_property_id = properties.property_id
+      AND bookings.date_placed = CURDATE()
+      AND TIME(bookings.time_placed) = '10:00:00'
+  )
+  AND NOT EXISTS (
+    SELECT *
+    FROM bookings
+    WHERE bookings.fk_agent_id = agents.agent_id
+      AND bookings.date_placed = CURDATE()
+      AND TIME(bookings.time_placed) = '10:00:00'
+  );
+
+CREATE TABLE IF NOT EXISTS bookings(
+  booking_id int NOT NULL AUTO_INCREMENT,
+  fk_customer_id int NOT NULL,
+  fk_property_id int NOT NULL,
+  fk_agent_id int NOT NULL,
+  date_placed date DEFAULT DATE_ADD(CURDATE(), INTERVAL 1 DAY)    /* CHECK(date_available IN ('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday')) */
+  time_placed time DEFAULT '08:00:00' CHECK(time_placed BETWEEN '08:00:00' AND '17:00:00'),,
+  PRIMARY KEY (booking_id),
+  FOREIGN KEY (fk_customer_id) REFERENCES customers(customer_id),
+  FOREIGN KEY (fk_property_id) REFERENCES properties(property_id),
+  FOREIGN KEY (fk_agent_id) REFERENCES agents(agent_id)
+);
+
+CREATE TABLE IF NOT EXISTS bookings(
+  booking_id int NOT NULL AUTO_INCREMENT,
+  fk_customer_id int NOT NULL,
+  fk_property_id int NOT NULL,
+  date_placed datetime NOT NULL,
+  time_placed time NOT NULL,
+  PRIMARY KEY (booking_id),
+  FOREIGN KEY (fk_customer_id) REFERENCES customers(customer_id),
+  FOREIGN KEY (fk_property_id) REFERENCES properties(property_id)
+);
+
+/* DELIMITER //
+DROP PROCEDURE withdrawProperty;
+CREATE PROCEDURE IF NOT EXISTS withdrawProperty(IN paramID INT)
+BEGIN
+    UPDATE properties 
+    SET 
+        status = 'WITHDRAWN'
+    WHERE
+        property_id = paramID && status = "FOR SALE"; 
+    END //
+DELIMITER ;
+
+CALL withdrawProperty(4); */
+
+DELIMITER //
+CREATE PROCEDURE add_property(IN p_address VARCHAR(255), IN p_postcode VARCHAR(9), IN p_seller_id INT)
+BEGIN
+  DECLARE address_exists INT;
+
+  SELECT COUNT(*) INTO address_exists
+  FROM properties
+  WHERE address = p_address AND postcode = p_postcode;
+
+  IF address_exists = 0 THEN
+    INSERT INTO properties (address, postcode, seller_id)
+    VALUES (p_address, p_postcode, p_seller_id);
+  ELSE
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'The property with this address already exists.';
+  END IF;
+
+END //
+DELIMITER ;
